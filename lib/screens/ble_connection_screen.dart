@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
+import '../localization/app_localizations.dart';
 import '../services/ble_sensor_service.dart';
 
 class BleConnectionScreen extends StatefulWidget {
@@ -124,9 +125,9 @@ class _BleConnectionScreenState
 
     if (connected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'KneeBand connected successfully.',
+            AppLocalizations.of(context).get('connectionSuccessful'),
           ),
         ),
       );
@@ -155,11 +156,12 @@ class _BleConnectionScreenState
   Widget build(BuildContext context) {
     final connected =
         widget.bleService.isConnected;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'KneeBand Connection',
+        title: Text(
+          l10n.get('kneeBandConnection'),
         ),
       ),
       body: SafeArea(

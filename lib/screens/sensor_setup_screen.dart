@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../localization/app_localizations.dart';
 import '../services/ble_sensor_service.dart';
 import 'ble_connection_screen.dart';
 
@@ -54,12 +55,13 @@ class _SensorSetupScreenState
   }
 
   void _continue() {
+    final l10n = AppLocalizations.of(context);
     if (_selectedMode == SensorMode.wearable &&
         !widget.bleService.isConnected) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Connect the KneeBand before continuing.',
+            l10n.get('connectSensors'),
           ),
         ),
       );
@@ -73,15 +75,16 @@ class _SensorSetupScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
 
     final wearableConnected =
         widget.bleService.isConnected;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Sensor Setup',
-          style: TextStyle(
+        title: Text(
+          l10n.get('sensorSetup'),
+          style: const TextStyle(
             fontWeight: FontWeight.w700,
           ),
         ),

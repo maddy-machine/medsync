@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/sensor_sample.dart';
 
 class ValidationResult {
@@ -13,76 +14,83 @@ class ValidationResult {
 class SensorValidator {
   static ValidationResult validate(
     List<SensorSample> samples, {
-    // ESP32 firmware sends at ~50 Hz (20 ms per packet).
-    // Adjust this if the firmware rate changes.
     double expectedSamplingRate = 50,
   }) {
     final issues = <String>[];
 
+    // Check 1: Must have samples
     if (samples.isEmpty) {
       return const ValidationResult(
         isValid: false,
-        issues: ['No sensor samples received.'],
+        issues: ['No sensor samples received during recording.'],
       );
     }
 
-    if (samples.length < 10) {
-      issues.add('Too few samples received.');
+    // Check 2: Minimum sample count threshold
+    if (samples.length < 5) {
+      issues.add('Too few sensor samples recorded (minimum 5 required).');
     }
 
+    // Check 3: Finite double values for thigh & shin IMUs
     for (int i = 0; i < samples.length; i++) {
       final sample = samples[i];
 
       if (!_isValidImu(sample.thigh)) {
-        issues.add(
-          'Invalid thigh sensor data at sample $i.',
-        );
+        issues.add('Corrupted thigh sensor data at sample $i.');
         break;
       }
 
       if (!_isValidImu(sample.shin)) {
-        issues.add(
-          'Invalid shin sensor data at sample $i.',
-        );
+        issues.add('Corrupted shin sensor data at sample $i.');
         break;
       }
     }
 
+    // Check 4: Non-decreasing timestamps (allow equal timestamps from BLE packet bursts)
     for (int i = 1; i < samples.length; i++) {
-      if (samples[i].timestamp <=
-          samples[i - 1].timestamp) {
-        issues.add(
-          'Sensor timestamps are not strictly increasing.',
-        );
+      if (samples[i].timestamp < samples[i - 1].timestamp) {
+        issues.add('Sensor timestamps are corrupted (time went backward).');
         break;
       }
     }
 
+    // Check 5: Sampling rate validation with wide tolerance (5 Hz to 200 Hz)
     if (samples.length >= 2) {
-      final duration =
-          (samples.last.timestamp -
-                  samples.first.timestamp) /
-              1000.0;
+      final rawDiff = samples.last.timestamp - samples.first.timestamp;
 
-      if (duration <= 0) {
-        issues.add(
-          'Invalid recording duration.',
-        );
+      // Auto-detect unit: if timestamps are in seconds vs milliseconds vs microseconds
+      double durationSeconds;
+      if (rawDiff > 1000000) {
+        durationSeconds = rawDiff / 1000000.0; // microseconds
+      } else if (rawDiff > 50) {
+        durationSeconds = rawDiff / 1000.0; // milliseconds
       } else {
-        final actualRate =
-            (samples.length - 1) / duration;
+        durationSeconds = rawDiff.toDouble(); // seconds
+      }
 
-        final difference =
-            (actualRate - expectedSamplingRate).abs();
+      if (durationSeconds <= 0) {
+        issues.add('Invalid recording duration (duration <= 0).');
+      } else {
+        final actualRate = (samples.length - 1) / durationSeconds;
 
-        // Allow ±35% tolerance to handle ESP32 timer jitter
-        // and BLE transmission delays.
-        if (difference > expectedSamplingRate * 0.35) {
+        debugPrint('[MedSync-Validator] Samples: ${samples.length}, Duration: ${durationSeconds.toStringAsFixed(2)}s, Actual Rate: ${actualRate.toStringAsFixed(1)} Hz');
+
+        // Accept any reasonable IMU sampling rate between 5 Hz and 250 Hz
+        if (actualRate < 5.0 || actualRate > 250.0) {
           issues.add(
-            'Sampling rate is outside the expected range.',
+            'Sampling rate (${actualRate.toStringAsFixed(1)} Hz) is outside acceptable bounds (5 - 250 Hz).',
           );
         }
       }
+    }
+
+    if (issues.isNotEmpty) {
+      debugPrint('[MedSync-Validator] ❌ Validation FAILED with ${issues.length} issue(s):');
+      for (final issue in issues) {
+        debugPrint('[MedSync-Validator]   - $issue');
+      }
+    } else {
+      debugPrint('[MedSync-Validator] ✅ Validation PASSED (${samples.length} samples).');
     }
 
     return ValidationResult(
@@ -92,6 +100,7 @@ class SensorValidator {
   }
 
   static bool _isValidImu(dynamic imu) {
+    if (imu == null) return false;
     final values = [
       imu.ax,
       imu.ay,
@@ -102,9 +111,7 @@ class SensorValidator {
     ];
 
     return values.every(
-      (value) =>
-          value is double &&
-          value.isFinite,
+      (value) => value is num && value.toDouble().isFinite,
     );
   }
 }

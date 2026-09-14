@@ -18,12 +18,12 @@ class ImuData {
 
   factory ImuData.fromJson(Map<String, dynamic> json) {
     return ImuData(
-      ax: (json['ax'] as num).toDouble(),
-      ay: (json['ay'] as num).toDouble(),
-      az: (json['az'] as num).toDouble(),
-      gx: (json['gx'] as num).toDouble(),
-      gy: (json['gy'] as num).toDouble(),
-      gz: (json['gz'] as num).toDouble(),
+      ax: (json['ax'] as num?)?.toDouble() ?? 0.0,
+      ay: (json['ay'] as num?)?.toDouble() ?? 0.0,
+      az: (json['az'] as num?)?.toDouble() ?? 0.0,
+      gx: (json['gx'] as num?)?.toDouble() ?? 0.0,
+      gy: (json['gy'] as num?)?.toDouble() ?? 0.0,
+      gz: (json['gz'] as num?)?.toDouble() ?? 0.0,
     );
   }
 

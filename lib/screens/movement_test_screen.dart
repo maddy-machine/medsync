@@ -10,6 +10,8 @@ import '../models/patient_assessment.dart';
 import '../models/sensor_sample.dart';
 import '../models/test_state.dart';
 import '../services/movement_test_controller.dart';
+import '../widgets/test_instruction_animation.dart';
+import '../widgets/test_tutorial_dialog.dart';
 
 class MovementTestScreen extends StatefulWidget {
   final MovementTestController controller;
@@ -628,10 +630,53 @@ AppLocalizations get _l10n =>
                   ],
                 ),
               ),
+
+              OutlinedButton.icon(
+                onPressed: () {
+                  TestTutorialDialog.show(
+                    context,
+                    testType: _currentType,
+                  );
+                },
+                icon: const Icon(
+                  Icons.play_circle_outline_rounded,
+                  size: 18,
+                ),
+                label: Text(
+                  _l.get('watchTutorial'),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Interactive Animation Preview Box
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: TestInstructionAnimation(
+                type: _currentType,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
 
           Container(
             width: double.infinity,
@@ -1664,7 +1709,7 @@ AppLocalizations get _l10n =>
           const SizedBox(height: 8),
 
           Text(
-            
+            widget.controller.lastErrorMessage ??
                 _l10n.get('sensorValidationFailed'),
             style: theme.textTheme.bodySmall
                 ?.copyWith(
@@ -1680,8 +1725,11 @@ AppLocalizations get _l10n =>
             width: double.infinity,
             height: 48,
             child: OutlinedButton.icon(
-              onPressed: () {
-                setState(() {});
+              onPressed: () async {
+                await widget.controller.cancelTest();
+                if (mounted) {
+                  setState(() {});
+                }
               },
               icon: const Icon(
                 Icons.refresh_rounded,

@@ -1,7 +1,5 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-
 import '../models/movement_test.dart';
 
 class TestInstructionAnimation extends StatefulWidget {
@@ -28,7 +26,7 @@ class _TestInstructionAnimationState
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 3200),
     )..repeat();
   }
 
@@ -68,18 +66,21 @@ class _ChairStandAnimation extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final movement =
-        (math.sin(progress * math.pi * 2) + 1) / 2;
+    // Smooth sit-to-stand motion cycle using sin curve with pause at top & bottom
+    final rawPhase = math.sin(progress * math.pi * 2);
+    final eased = Curves.easeInOutCubic.transform((rawPhase + 1) / 2);
 
-    final eased =
-        Curves.easeInOut.transform(movement);
+    final angle = (90 + (eased * 85)).round(); // 90° seated -> 175° standing
+    final isStanding = eased > 0.5;
 
     return Container(
-      color: colors.surfaceContainerHighest.withValues(
-        alpha: 0.35,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Stack(
         children: [
+          // Background Alignment Grid
           Positioned.fill(
             child: CustomPaint(
               painter: _GridPainter(
@@ -88,79 +89,106 @@ class _ChairStandAnimation extends StatelessWidget {
             ),
           ),
 
+          // Header Badge
           Positioned(
-            left: 22,
-            top: 18,
+            left: 14,
+            top: 12,
             child: _Badge(
-              icon: Icons.swap_vert_rounded,
-              text: 'SIT  ↕  STAND',
+              icon: Icons.event_seat_rounded,
+              text: 'SIT-TO-STAND (30S)',
               color: colors.primary,
             ),
           ),
 
+          // Angle Readout Badge
           Positioned(
-            right: 20,
-            top: 21,
-            child: Text(
-              '30 SEC',
-              style: TextStyle(
-                color: colors.onSurfaceVariant,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
+            right: 14,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 5,
               ),
-            ),
-          ),
-
-          Positioned(
-            left: 24,
-            bottom: 25,
-            child: SizedBox(
-              width: 78,
-              height: 115,
-              child: CustomPaint(
-                painter: _ChairPainter(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(
-                bottom: 20,
-              ),
-              child: Transform.translate(
-                offset: Offset(
-                  25 * (1 - eased),
-                  38 * (1 - eased),
-                ),
-                child: CustomPaint(
-                  size: const Size(80, 150),
-                  painter: _PersonPainter(
-                    primary: colors.primary,
-                    secondary:
-                        colors.primaryContainer,
-                    kneeBend: 1 - eased,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            bottom: 12,
-            right: 20,
-            child: Text(
-              eased > 0.5
-                  ? 'STAND'
-                  : 'SIT',
-              style: TextStyle(
+              decoration: BoxDecoration(
                 color: colors.primary,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: colors.primary.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                'KNEE $angle°',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ),
+          ),
+
+          // Floor Line
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 24,
+            child: Container(
+              height: 2,
+              color: colors.onSurfaceVariant.withValues(alpha: 0.25),
+            ),
+          ),
+
+          // Integrated Chair & Person Anatomy Canvas
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _SitToStandBiomechanicsPainter(
+                standProgress: eased,
+                primaryColor: colors.primary,
+                accentColor: colors.secondary,
+                chairColor: colors.onSurfaceVariant.withValues(alpha: 0.75),
+              ),
+            ),
+          ),
+
+          // State Label (Sit vs Stand)
+          Positioned(
+            bottom: 10,
+            right: 14,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 5,
+              ),
+              decoration: BoxDecoration(
+                color: isStanding
+                    ? const Color(0xFF10B981)
+                    : colors.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isStanding ? Icons.arrow_upward : Icons.arrow_downward,
+                    size: 12,
+                    color: isStanding ? Colors.white : colors.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isStanding ? 'STAND (EXTENSION)' : 'SIT (FLEXION)',
+                    style: TextStyle(
+                      color: isStanding ? Colors.white : colors.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -181,15 +209,13 @@ class _FastWalkAnimation extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    final walkProgress =
-        Curves.easeInOut.transform(progress);
-
-    final legMovement =
-        math.sin(progress * math.pi * 8);
+    final walkProgress = Curves.easeInOut.transform(progress);
+    final legMovement = math.sin(progress * math.pi * 8);
 
     return Container(
-      color: colors.surfaceContainerHighest.withValues(
-        alpha: 0.35,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Stack(
         children: [
@@ -202,24 +228,44 @@ class _FastWalkAnimation extends StatelessWidget {
           ),
 
           Positioned(
-            left: 20,
-            top: 18,
+            left: 14,
+            top: 12,
             child: _Badge(
               icon: Icons.directions_walk_rounded,
-              text: 'FAST WALK',
+              text: 'FAST WALK (20M)',
               color: colors.primary,
             ),
           ),
 
           Positioned(
-            left: 22,
-            right: 22,
-            bottom: 42,
-            child: CustomPaint(
-              size: const Size(
-                double.infinity,
-                20,
+            right: 14,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 5,
               ),
+              decoration: BoxDecoration(
+                color: colors.secondaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'GAIT PACING',
+                style: TextStyle(
+                  color: colors.secondary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 38,
+            child: CustomPaint(
+              size: const Size(double.infinity, 20),
               painter: _DistancePainter(
                 color: colors.primary,
               ),
@@ -227,26 +273,26 @@ class _FastWalkAnimation extends StatelessWidget {
           ),
 
           Positioned(
-            left: 22,
-            bottom: 13,
+            left: 20,
+            bottom: 10,
             child: Text(
-              'START',
+              'START (0m)',
               style: TextStyle(
                 color: colors.onSurfaceVariant,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
 
           Positioned(
-            right: 22,
-            bottom: 13,
+            right: 20,
+            bottom: 10,
             child: Text(
-              '20 m',
+              'FINISH (20m)',
               style: TextStyle(
                 color: colors.primary,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -258,19 +304,14 @@ class _FastWalkAnimation extends StatelessWidget {
               0.02,
             ),
             child: Transform.translate(
-              offset: Offset(
-                0,
-                legMovement * 2,
-              ),
+              offset: Offset(0, legMovement * 2.5),
               child: CustomPaint(
                 size: const Size(76, 145),
-                painter: _PersonPainter(
+                painter: _PersonGaitPainter(
                   primary: colors.primary,
-                  secondary:
-                      colors.primaryContainer,
+                  secondary: colors.primaryContainer,
                   kneeBend: 0.15,
-                  legSwing:
-                      legMovement * 0.25,
+                  legSwing: legMovement * 0.25,
                 ),
               ),
             ),
@@ -297,10 +338,10 @@ class _Badge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: 10,
-        vertical: 7,
+        vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -308,7 +349,7 @@ class _Badge extends StatelessWidget {
         children: [
           Icon(
             icon,
-            size: 15,
+            size: 14,
             color: color,
           ),
           const SizedBox(width: 5),
@@ -335,19 +376,12 @@ class _GridPainter extends CustomPainter {
   });
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
+  void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color.withValues(alpha: 0.055)
+      ..color = color.withValues(alpha: 0.05)
       ..strokeWidth = 1;
 
-    for (
-      double x = 0;
-      x < size.width;
-      x += 28
-    ) {
+    for (double x = 0; x < size.width; x += 28) {
       canvas.drawLine(
         Offset(x, 0),
         Offset(x, size.height),
@@ -355,11 +389,7 @@ class _GridPainter extends CustomPainter {
       );
     }
 
-    for (
-      double y = 0;
-      y < size.height;
-      y += 28
-    ) {
+    for (double y = 0; y < size.height; y += 28) {
       canvas.drawLine(
         Offset(0, y),
         Offset(size.width, y),
@@ -369,9 +399,7 @@ class _GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(
-    covariant _GridPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _GridPainter oldDelegate) {
     return oldDelegate.color != color;
   }
 }
@@ -384,10 +412,7 @@ class _DistancePainter extends CustomPainter {
   });
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
+  void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color.withValues(alpha: 0.55)
       ..strokeWidth = 2
@@ -395,117 +420,247 @@ class _DistancePainter extends CustomPainter {
 
     const dash = 7.0;
     const gap = 6.0;
-
     var x = 0.0;
 
     while (x < size.width) {
       canvas.drawLine(
         Offset(x, size.height / 2),
-        Offset(
-          math.min(
-            x + dash,
-            size.width,
-          ),
-          size.height / 2,
-        ),
+        Offset(math.min(x + dash, size.width), size.height / 2),
         paint,
       );
-
       x += dash + gap;
     }
 
     final arrow = Path()
-      ..moveTo(
-        size.width - 10,
-        size.height / 2 - 5,
-      )
-      ..lineTo(
-        size.width,
-        size.height / 2,
-      )
-      ..lineTo(
-        size.width - 10,
-        size.height / 2 + 5,
-      );
+      ..moveTo(size.width - 10, size.height / 2 - 5)
+      ..lineTo(size.width, size.height / 2)
+      ..lineTo(size.width - 10, size.height / 2 + 5);
 
-    canvas.drawPath(
-      arrow,
-      paint,
-    );
+    canvas.drawPath(arrow, paint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _DistancePainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _DistancePainter oldDelegate) {
     return oldDelegate.color != color;
   }
 }
 
-class _ChairPainter extends CustomPainter {
-  final Color color;
+/// Clinically accurate custom painter for Sit-to-Stand Biomechanics
+class _SitToStandBiomechanicsPainter extends CustomPainter {
+  final double standProgress; // 0.0 = fully seated, 1.0 = fully standing
+  final Color primaryColor;
+  final Color accentColor;
+  final Color chairColor;
 
-  const _ChairPainter({
-    required this.color,
+  const _SitToStandBiomechanicsPainter({
+    required this.standProgress,
+    required this.primaryColor,
+    required this.accentColor,
+    required this.chairColor,
   });
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
-    final paint = Paint()
-      ..color = color.withValues(alpha: 0.55)
+  void paint(Canvas canvas, Size size) {
+    final floorY = size.height - 24;
+
+    // Chair geometry parameters
+    final chairCenterX = size.width * 0.46;
+    const seatWidth = 56.0;
+    final seatY = floorY - 44.0;
+    const backrestHeight = 58.0;
+
+    // -------------------------------------------------------------
+    // 1. DRAW CHAIR (Backrest, Cushion, Legs with Depth Shading)
+    // -------------------------------------------------------------
+    final chairFramePaint = Paint()
+      ..color = chairColor
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final chairCushionPaint = Paint()
+      ..color = chairColor.withValues(alpha: 0.25)
+      ..style = PaintingStyle.fill;
+
+    // Chair Seat Cushion
+    final seatRect = RRect.fromRectAndRadius(
+      Rect.fromLTRB(
+        chairCenterX - seatWidth / 2,
+        seatY - 6,
+        chairCenterX + seatWidth / 2,
+        seatY + 4,
+      ),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(seatRect, chairCushionPaint);
+    canvas.drawRRect(seatRect, chairFramePaint);
+
+    // Chair Backrest
+    final backrestPath = Path()
+      ..moveTo(chairCenterX - seatWidth / 2 + 4, seatY)
+      ..lineTo(chairCenterX - seatWidth / 2 + 4, seatY - backrestHeight)
+      ..lineTo(chairCenterX - seatWidth / 2 + 18, seatY - backrestHeight);
+    canvas.drawPath(backrestPath, chairFramePaint);
+
+    // Chair Legs (Front & Rear)
+    canvas.drawLine(
+      Offset(chairCenterX - seatWidth / 2 + 6, seatY),
+      Offset(chairCenterX - seatWidth / 2 + 6, floorY),
+      chairFramePaint,
+    );
+    canvas.drawLine(
+      Offset(chairCenterX + seatWidth / 2 - 6, seatY),
+      Offset(chairCenterX + seatWidth / 2 - 6, floorY),
+      chairFramePaint,
+    );
+
+    // -------------------------------------------------------------
+    // 2. BIOMECHANICAL ANATOMY COMPUTATION (Sit -> Stand)
+    // -------------------------------------------------------------
+    // Feet remain stationary on floor in front of chair
+    final footX = chairCenterX + 16.0;
+    final footY = floorY - 4.0;
+
+    // Hip position moves from seat cushion up to standing position
+    final seatedHipX = chairCenterX - 4.0;
+    final seatedHipY = seatY - 8.0;
+
+    final standingHipX = chairCenterX + 12.0;
+    final standingHipY = floorY - 96.0;
+
+    final hipX = seatedHipX + (standingHipX - seatedHipX) * standProgress;
+    final hipY = seatedHipY + (standingHipY - seatedHipY) * standProgress;
+
+    // Knee position calculates realistic flexion/extension
+    final seatedKneeX = footX;
+    final seatedKneeY = seatY - 4.0;
+
+    final standingKneeX = chairCenterX + 14.0;
+    final standingKneeY = floorY - 50.0;
+
+    final kneeX = seatedKneeX + (standingKneeX - seatedKneeX) * standProgress;
+    final kneeY = seatedKneeY + (standingKneeY - seatedKneeY) * standProgress;
+
+    final hip = Offset(hipX, hipY);
+    final knee = Offset(kneeX, kneeY);
+    final ankle = Offset(footX, footY);
+    final footEnd = Offset(footX + 16.0, footY);
+
+    // Spine and Head
+    final leanAngle = (1.0 - standProgress) * 0.18; // Lean slightly forward when rising
+    final shoulderX = hipX + math.sin(leanAngle) * 44;
+    final shoulderY = hipY - math.cos(leanAngle) * 44;
+    final shoulder = Offset(shoulderX, shoulderY);
+
+    final headX = shoulderX + math.sin(leanAngle) * 18;
+    final headY = shoulderY - math.cos(leanAngle) * 18 - 10;
+    final head = Offset(headX, headY);
+
+    // -------------------------------------------------------------
+    // 3. DRAW PERSON SKELETON & SEGMENTS
+    // -------------------------------------------------------------
+    final limbPaint = Paint()
+      ..color = primaryColor
       ..strokeWidth = 6
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
+    final headPaint = Paint()
+      ..color = accentColor
+      ..style = PaintingStyle.fill;
+
+    // Draw Head
+    canvas.drawCircle(head, 12, headPaint);
+
+    // Draw Torso (Spine)
+    canvas.drawLine(hip, shoulder, limbPaint);
+
+    // Draw Crossed Arms over Chest
+    final armCrossPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+
+    final midTorsoX = (hip.dx + shoulder.dx) / 2;
+    final midTorsoY = (hip.dy + shoulder.dy) / 2;
     canvas.drawLine(
-      Offset(14, 38),
-      Offset(62, 38),
-      paint,
+      Offset(midTorsoX - 10, midTorsoY - 8),
+      Offset(midTorsoX + 12, midTorsoY + 6),
+      armCrossPaint,
+    );
+    canvas.drawLine(
+      Offset(midTorsoX + 10, midTorsoY - 8),
+      Offset(midTorsoX - 12, midTorsoY + 6),
+      armCrossPaint,
     );
 
-    canvas.drawLine(
-      Offset(14, 38),
-      Offset(14, 92),
-      paint,
+    // Draw Thigh Segment (Hip to Knee)
+    canvas.drawLine(hip, knee, limbPaint);
+
+    // Draw Shin Segment (Knee to Ankle)
+    canvas.drawLine(knee, ankle, limbPaint);
+
+    // Draw Foot
+    canvas.drawLine(ankle, footEnd, limbPaint);
+
+    // -------------------------------------------------------------
+    // 4. DRAW DUAL-IMU SENSOR HIGH-VISIBILITY GLOW STRAPS
+    // -------------------------------------------------------------
+    final thighSensorPos = Offset(
+      (hip.dx + knee.dx) / 2,
+      (hip.dy + knee.dy) / 2,
+    );
+    final shinSensorPos = Offset(
+      (knee.dx + ankle.dx) / 2,
+      (knee.dy + ankle.dy) / 2,
     );
 
-    canvas.drawLine(
-      Offset(62, 38),
-      Offset(62, 92),
-      paint,
-    );
+    final thighGlowPaint = Paint()
+      ..color = const Color(0xFF10B981) // Green Thigh IMU 0x68
+      ..style = PaintingStyle.fill;
 
-    canvas.drawLine(
-      Offset(14, 92),
-      Offset(6, 108),
-      paint,
-    );
+    final shinGlowPaint = Paint()
+      ..color = const Color(0xFF06B6D4) // Cyan Shin IMU 0x69
+      ..style = PaintingStyle.fill;
 
-    canvas.drawLine(
-      Offset(62, 92),
-      Offset(70, 108),
-      paint,
-    );
+    final sensorBorderPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    // Thigh IMU (0x68)
+    canvas.drawCircle(thighSensorPos, 7, thighGlowPaint);
+    canvas.drawCircle(thighSensorPos, 7, sensorBorderPaint);
+
+    // Shin IMU (0x69)
+    canvas.drawCircle(shinSensorPos, 7, shinGlowPaint);
+    canvas.drawCircle(shinSensorPos, 7, sensorBorderPaint);
+
+    // -------------------------------------------------------------
+    // 5. DRAW DYNAMIC KNEE JOINT ANGLE ARC & INDICATOR
+    // -------------------------------------------------------------
+    final arcPaint = Paint()
+      ..color = const Color(0xFFF59E0B)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawCircle(knee, 16, arcPaint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _ChairPainter oldDelegate,
-  ) {
-    return oldDelegate.color != color;
+  bool shouldRepaint(covariant _SitToStandBiomechanicsPainter oldDelegate) {
+    return oldDelegate.standProgress != standProgress ||
+        oldDelegate.primaryColor != primaryColor;
   }
 }
 
-class _PersonPainter extends CustomPainter {
+class _PersonGaitPainter extends CustomPainter {
   final Color primary;
   final Color secondary;
   final double kneeBend;
   final double legSwing;
 
-  const _PersonPainter({
+  const _PersonGaitPainter({
     required this.primary,
     required this.secondary,
     required this.kneeBend,
@@ -513,17 +668,11 @@ class _PersonPainter extends CustomPainter {
   });
 
   @override
-  void paint(
-    Canvas canvas,
-    Size size,
-  ) {
+  void paint(Canvas canvas, Size size) {
     final centerX = size.width / 2;
 
-    final skinPaint = Paint()
-      ..color = secondary;
-
-    final bodyPaint = Paint()
-      ..color = primary;
+    final skinPaint = Paint()..color = secondary;
+    final bodyPaint = Paint()..color = primary;
 
     final linePaint = Paint()
       ..color = primary
@@ -531,107 +680,89 @@ class _PersonPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    canvas.drawCircle(
-      Offset(centerX, 18),
-      11,
-      skinPaint,
-    );
+    canvas.drawCircle(Offset(centerX, 18), 11, skinPaint);
 
     final torso = RRect.fromRectAndRadius(
       Rect.fromCenter(
-        center: Offset(
-          centerX,
-          56,
-        ),
-        width: 29,
+        center: Offset(centerX, 56),
+        width: 28,
         height: 52,
       ),
       const Radius.circular(12),
     );
-
-    canvas.drawRRect(
-      torso,
-      bodyPaint,
-    );
+    canvas.drawRRect(torso, bodyPaint);
 
     canvas.drawLine(
       Offset(centerX - 13, 47),
-      Offset(centerX - 27, 76),
+      Offset(centerX - 27 + (legSwing * 10), 76),
       linePaint,
     );
-
     canvas.drawLine(
       Offset(centerX + 13, 47),
-      Offset(centerX + 27, 76),
+      Offset(centerX + 27 - (legSwing * 10), 76),
       linePaint,
     );
 
-    final bend =
-        kneeBend.clamp(0.0, 1.0);
+    final bend = kneeBend.clamp(0.0, 1.0);
 
-    final leftHip =
-        Offset(centerX - 8, 82);
-
+    final leftHip = Offset(centerX - 8, 82);
     final leftKnee = Offset(
-      centerX - 12 -
-          (bend * 11) +
-          legSwing * 12,
+      centerX - 12 - (bend * 11) + (legSwing * 12),
       111,
     );
-
     final leftFoot = Offset(
-      centerX - 18 +
-          (bend * 8) +
-          legSwing * 17,
+      centerX - 18 + (bend * 8) + (legSwing * 17),
       138,
     );
 
-    canvas.drawLine(
-      leftHip,
-      leftKnee,
-      linePaint,
-    );
+    canvas.drawLine(leftHip, leftKnee, linePaint);
+    canvas.drawLine(leftKnee, leftFoot, linePaint);
 
-    canvas.drawLine(
-      leftKnee,
-      leftFoot,
-      linePaint,
-    );
-
-    final rightHip =
-        Offset(centerX + 8, 82);
-
+    final rightHip = Offset(centerX + 8, 82);
     final rightKnee = Offset(
-      centerX + 12 +
-          (bend * 11) -
-          legSwing * 12,
+      centerX + 12 + (bend * 11) - (legSwing * 12),
       111,
     );
-
     final rightFoot = Offset(
-      centerX + 18 -
-          (bend * 8) -
-          legSwing * 17,
+      centerX + 18 - (bend * 8) - (legSwing * 17),
       138,
     );
 
-    canvas.drawLine(
-      rightHip,
-      rightKnee,
-      linePaint,
+    canvas.drawLine(rightHip, rightKnee, linePaint);
+    canvas.drawLine(rightKnee, rightFoot, linePaint);
+
+    // IMU Sensor Visual Overlay Dots
+    final thighSensorPos = Offset(
+      (leftHip.dx + leftKnee.dx) / 2,
+      (leftHip.dy + leftKnee.dy) / 2,
+    );
+    final shinSensorPos = Offset(
+      (leftKnee.dx + leftFoot.dx) / 2,
+      (leftKnee.dy + leftFoot.dy) / 2,
     );
 
-    canvas.drawLine(
-      rightKnee,
-      rightFoot,
-      linePaint,
-    );
+    final thighGlowPaint = Paint()
+      ..color = const Color(0xFF10B981)
+      ..style = PaintingStyle.fill;
+
+    final shinGlowPaint = Paint()
+      ..color = const Color(0xFF06B6D4)
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawCircle(thighSensorPos, 6, thighGlowPaint);
+    canvas.drawCircle(thighSensorPos, 6, borderPaint);
+
+    canvas.drawCircle(shinSensorPos, 6, shinGlowPaint);
+    canvas.drawCircle(shinSensorPos, 6, borderPaint);
   }
 
   @override
-  bool shouldRepaint(
-    covariant _PersonPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _PersonGaitPainter oldDelegate) {
     return oldDelegate.primary != primary ||
         oldDelegate.secondary != secondary ||
         oldDelegate.kneeBend != kneeBend ||

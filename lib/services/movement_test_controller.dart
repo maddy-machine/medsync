@@ -47,6 +47,9 @@ class MovementTestController {
 
   TestState _state = TestState.idle;
 
+  String? lastErrorMessage;
+  ValidationResult? lastValidationResult;
+
   int elapsedSeconds = 0;
   int preparationSeconds = 3;
   int calibrationSeconds = 3;
@@ -282,19 +285,36 @@ class MovementTestController {
     _state = TestState.preparing;
     _notifyChanged();
 
+    // Start the ESP32 streaming ONCE before preparation begins.
+    // The stream is kept alive continuously through calibration
+    // and recording. We only swap the Dart-side listener between
+    // phases, never sending STOP/START in between.
+    try {
+      await sensorService.start();
+    } catch (e, stack) {
+      debugPrint('[MedSync] ❌ Exception starting sensorService: $e\n$stack');
+      lastErrorMessage = 'Sensor connection error: $e';
+      _state = TestState.failed;
+      _notifyChanged();
+      return;
+    }
+
     await _runPreparation();
 
     if (_state != TestState.preparing) {
+      await sensorService.stop();
       return;
     }
 
     await _runCalibration();
 
     if (_state != TestState.preparing) {
+      await sensorService.stop();
       return;
     }
 
     if (!_imuSignalProcessor.isCalibrated) {
+      await sensorService.stop();
       _state = TestState.failed;
       _notifyChanged();
       return;
@@ -326,20 +346,29 @@ class MovementTestController {
 
     _notifyChanged();
 
+    int calSampleCount = 0;
+
+    // Attach calibration listener to the already-running sample stream.
+    // The ESP32 is streaming continuously — we do NOT call start() here.
     _calibrationSubscription =
         sensorService.sampleStream.listen(
       (sample) {
+        calSampleCount++;
+        // Log once per second (ESP32 streams at 50 Hz) to confirm data flow.
+        if (calSampleCount % 50 == 1) {
+          debugPrint('[MedSync-Cal] Calibration sample #$calSampleCount: thigh.ax=${sample.thigh.ax}');
+        }
         _imuSignalProcessor
             .addCalibrationSample(sample);
       },
-      onError: (_) {
+      onError: (err) {
+        debugPrint('[MedSync] ❌ Calibration stream error: $err');
         _isCalibrating = false;
+        lastErrorMessage = 'Calibration stream error: $err';
         _state = TestState.failed;
         _notifyChanged();
       },
     );
-
-    await sensorService.start();
 
     for (int i = 3; i > 0; i--) {
       if (_state != TestState.preparing) {
@@ -356,6 +385,7 @@ class MovementTestController {
       );
     }
 
+    // Cancel the calibration listener (stream stays running for recording).
     await _stopCalibrationStream();
 
     final calibrated =
@@ -365,6 +395,8 @@ class MovementTestController {
     _isCalibrating = false;
 
     if (!calibrated) {
+      debugPrint('[MedSync] ❌ finishCalibration returned false!');
+      lastErrorMessage = 'Sensor calibration failed: 0 samples received. Please verify KneeBand BLE connection.';
       _state = TestState.failed;
     }
 
@@ -372,17 +404,18 @@ class MovementTestController {
   }
 
   Future<void> _stopCalibrationStream() async {
-    await sensorService.stop();
-
-    await _calibrationSubscription
-        ?.cancel();
-
+    // Cancel only the Dart-side calibration listener.
+    // Do NOT send STOP to the ESP32 — the stream stays running
+    // so the recording phase can immediately attach its own listener.
+    await _calibrationSubscription?.cancel();
     _calibrationSubscription = null;
   }
 
   Future<void> _startRecording(
     MovementTest test,
   ) async {
+    // The ESP32 is already streaming — do NOT call sensorService.start() here.
+    // We only attach the Dart-side recording listener to the running stream.
     _subscription =
         sensorService.sampleStream.listen(
       (sample) {
@@ -418,8 +451,6 @@ class MovementTestController {
         _notifyChanged();
       },
     );
-
-    await sensorService.start();
 
     if (_state != TestState.preparing) {
       await _subscription?.cancel();
@@ -568,6 +599,8 @@ class MovementTestController {
     }
 
     if (!result.isValid) {
+      lastValidationResult = result;
+      lastErrorMessage = result.issues.join('\n');
       _state = TestState.failed;
       _stoppingTest = false;
       _notifyChanged();
@@ -1165,6 +1198,9 @@ class MovementTestController {
 
   Future<void> cancelTest() async {
     await _cleanupCurrentTest();
+
+    lastErrorMessage = null;
+    lastValidationResult = null;
 
     session = null;
     latestSample = null;

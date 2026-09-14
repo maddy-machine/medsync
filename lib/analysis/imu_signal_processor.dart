@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/imu_data.dart';
 import '../models/sensor_sample.dart';
 
@@ -74,6 +76,7 @@ class ImuSignalProcessor {
   }
 
   bool finishCalibration() {
+    debugPrint('[MedSync] finishCalibration() called. Samples count: thigh=${_thighGxCalibration.length}, shin=${_shinGxCalibration.length}');
     if (_thighGxCalibration.isEmpty ||
         _shinGxCalibration.isEmpty) {
       return false;

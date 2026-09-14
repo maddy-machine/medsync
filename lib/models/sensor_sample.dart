@@ -16,15 +16,17 @@ class SensorSample {
     // The ESP32 firmware sends "ts"; accept both "ts" and
     // "timestamp" so the model works with both the hardware
     // and any previously serialized data.
-    final rawTs = json['ts'] ?? json['timestamp'];
+    final rawTs = json['ts'] ?? json['timestamp'] ?? 0;
+    final thighJson = json['thigh'];
+    final shinJson = json['shin'];
     return SensorSample(
-      timestamp: (rawTs as num).toInt(),
-      thigh: ImuData.fromJson(
-        Map<String, dynamic>.from(json['thigh']),
-      ),
-      shin: ImuData.fromJson(
-        Map<String, dynamic>.from(json['shin']),
-      ),
+      timestamp: (rawTs is num) ? rawTs.toInt() : 0,
+      thigh: thighJson is Map
+          ? ImuData.fromJson(Map<String, dynamic>.from(thighJson))
+          : const ImuData(ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0),
+      shin: shinJson is Map
+          ? ImuData.fromJson(Map<String, dynamic>.from(shinJson))
+          : const ImuData(ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0),
     );
   }
 

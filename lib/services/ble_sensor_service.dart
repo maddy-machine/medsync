@@ -294,6 +294,13 @@ class BleSensorService implements SensorService {
         );
       }
 
+      try {
+        await device.requestMtu(512);
+        debugPrint('[MedSync-BLE] Requested MTU 512');
+      } catch (e) {
+        debugPrint('[MedSync-BLE] MTU request warning: $e');
+      }
+
       // Android GATT requires a short settling delay after the
       // connection is established before service discovery will
       // succeed reliably. Without this, discoverServices() may
@@ -420,7 +427,7 @@ class BleSensorService implements SensorService {
     await characteristic.setNotifyValue(true);
 
     _dataSubscription =
-        characteristic.lastValueStream.listen(
+        characteristic.onValueReceived.listen(
       (value) {
         _handleIncomingPacket(value);
       },
@@ -434,6 +441,7 @@ class BleSensorService implements SensorService {
 
   // Counter used to limit verbose packet logging to the first few packets.
   int _packetLogCount = 0;
+  final StringBuffer _rxBuffer = StringBuffer();
 
   void _handleIncomingPacket(
     List<int> bytes,
@@ -442,44 +450,159 @@ class BleSensorService implements SensorService {
       return;
     }
 
-    try {
-      final text = utf8.decode(
-        bytes,
-        allowMalformed: false,
-      );
+    final chunk = utf8.decode(
+      bytes,
+      allowMalformed: true,
+    );
 
-      // Log the first 3 packets to the terminal so we can
-      // verify the JSON structure matches what the app expects.
-      if (_packetLogCount < 3) {
-        debugPrint('[MedSync-BLE] Packet #$_packetLogCount: $text');
-        _packetLogCount++;
+    _rxBuffer.write(chunk);
+
+    String content = _rxBuffer.toString();
+
+    // 1. Process all newline-delimited complete packets (fast path for formatted streams)
+    if (content.contains('\n')) {
+      final lines = content.split('\n');
+      final remaining = lines.removeLast();
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isNotEmpty) {
+          _processSingleJsonString(trimmed);
+        }
+      }
+      _rxBuffer.clear();
+      _rxBuffer.write(remaining);
+      return;
+    }
+
+    // 2. Process boundary-delimited packets (when no newlines are present)
+    // Every sensor packet begins with {"seq": or {"ts":
+    while (true) {
+      final startIdx = content.indexOf('{"seq":');
+      final altStartIdx = content.indexOf('{"ts":');
+      final firstIdx = (startIdx != -1 && altStartIdx != -1)
+          ? (startIdx < altStartIdx ? startIdx : altStartIdx)
+          : (startIdx != -1 ? startIdx : altStartIdx);
+
+      if (firstIdx == -1) {
+        if (content.length > 512) {
+          content = '';
+        }
+        break;
       }
 
-      final decoded = jsonDecode(text);
+      // Check if there is a SECOND packet header following this one in the buffer
+      final nextStart = content.indexOf('{"seq":', firstIdx + 7);
+      final nextAlt = content.indexOf('{"ts":', firstIdx + 6);
+      int nextIdx = -1;
+      if (nextStart != -1 && nextAlt != -1) {
+        nextIdx = nextStart < nextAlt ? nextStart : nextAlt;
+      } else if (nextStart != -1) {
+        nextIdx = nextStart;
+      } else if (nextAlt != -1) {
+        nextIdx = nextAlt;
+      }
 
-      if (decoded is! Map) {
-        debugPrint('[MedSync-BLE] Packet is not a JSON object: $text');
+      if (nextIdx != -1) {
+        // We have a bounded packet from firstIdx to nextIdx
+        final packetStr = content.substring(firstIdx, nextIdx).trim();
+        content = content.substring(nextIdx);
+        if (packetStr.isNotEmpty) {
+          _processSingleJsonString(packetStr);
+        }
+      } else {
+        // Only one packet in buffer so far.
+        // If it already contains balanced braces, parse it immediately
+        int depth = 0;
+        int endIdx = -1;
+        for (int i = firstIdx; i < content.length; i++) {
+          if (content[i] == '{') depth++;
+          if (content[i] == '}') depth--;
+          if (depth == 0) {
+            endIdx = i;
+            break;
+          }
+        }
+
+        if (endIdx != -1) {
+          final packetStr = content.substring(firstIdx, endIdx + 1);
+          content = content.substring(endIdx + 1);
+          _processSingleJsonString(packetStr);
+        } else {
+          // If the packet contains both thigh and shin and was truncated by MTU boundary
+          // (e.g. >= 160 chars), auto-repair and parse it immediately!
+          if (content.contains('"thigh"') &&
+              content.contains('"shin"') &&
+              content.length >= 160) {
+            _processSingleJsonString(content.substring(firstIdx));
+            content = '';
+          }
+          break;
+        }
+      }
+    }
+
+    _rxBuffer.clear();
+    if (content.length > 4096) {
+      content = '';
+    }
+    _rxBuffer.write(content);
+  }
+
+  void _processSingleJsonString(String text) {
+    try {
+      final json = _repairAndDecodeJson(text);
+      if (json == null) {
         return;
       }
 
-      final json =
-          Map<String, dynamic>.from(decoded);
+      if (_packetLogCount < 3) {
+        debugPrint('[MedSync-BLE] Validated Packet #$_packetLogCount: $text');
+        _packetLogCount++;
+      }
 
-      final sample =
-          SensorSample.fromJson(json);
-
+      final sample = SensorSample.fromJson(json);
       _sampleController.add(sample);
     } catch (e) {
-      // Log the error AND the raw bytes so we can debug
-      // JSON key mismatches or encoding issues.
-      if (_packetLogCount < 10) {
-        final raw = String.fromCharCodes(bytes);
-        debugPrint('[MedSync-BLE] ❌ Parse error: $e | Raw: $raw');
-      }
-      _setStatus(
-        'Invalid sensor packet received.',
-      );
+      debugPrint('[MedSync-BLE] ❌ JSON Parse error: $e | Raw: $text');
     }
+  }
+
+  Map<String, dynamic>? _repairAndDecodeJson(String text) {
+    var s = text.trim();
+    if (!s.startsWith('{')) return null;
+
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+
+    // Clean up trailing dangling keys, signs, or decimal points caused by MTU truncation
+    s = s.replaceAll(RegExp(r',"[a-zA-Z]+":-?$'), '');
+    s = s.replaceAll(RegExp(r'\.$'), '');
+    s = s.replaceAll(RegExp(r':-?$'), '');
+    if (s.endsWith(',')) {
+      s = s.substring(0, s.length - 1);
+    }
+
+    int openCount = 0;
+    for (int i = 0; i < s.length; i++) {
+      if (s[i] == '{') openCount++;
+      if (s[i] == '}') openCount--;
+    }
+    if (openCount > 0) {
+      s = s + ('}' * openCount);
+    }
+
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   @override
@@ -489,6 +612,14 @@ class BleSensorService implements SensorService {
         'KneeBand is not connected.',
       );
     }
+
+    // Do NOT re-subscribe here. The BLE notification subscription
+    // is established once in connectToDevice() via _subscribeToSensorData()
+    // and must remain alive across start/stop cycles. Re-subscribing here
+    // would cancel and recreate the listener, causing packet loss between
+    // the calibration and recording phases.
+    _rxBuffer.clear();
+    _packetLogCount = 0;
 
     await _sendCommand('START');
 

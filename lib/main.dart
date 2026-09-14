@@ -189,11 +189,14 @@ class _MedSyncAppState extends State<MedSyncApp> {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF176B87),
+          seedColor: const Color(0xFF0F766E),
+          primary: const Color(0xFF0F766E),
+          primaryContainer: const Color(0xFFCCFBF1),
+          secondary: const Color(0xFF0284C7),
+          secondaryContainer: const Color(0xFFE0F2FE),
           brightness: Brightness.light,
         ),
-        scaffoldBackgroundColor:
-            const Color(0xFFF6FAFB),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
       ),
 
       home: ScreeningHomePage(
