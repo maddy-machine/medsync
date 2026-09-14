@@ -561,7 +561,9 @@ class BleSensorService implements SensorService {
       }
 
       final sample = SensorSample.fromJson(json);
-      _sampleController.add(sample);
+      if (!_sampleController.isClosed) {
+        _sampleController.add(sample);
+      }
     } catch (e) {
       debugPrint('[MedSync-BLE] ❌ JSON Parse error: $e | Raw: $text');
     }
@@ -626,7 +628,7 @@ class BleSensorService implements SensorService {
     await Future.delayed(const Duration(milliseconds: 250));
 
     try {
-      if (_dataCharacteristic != null) {
+      if (_dataCharacteristic != null && !_dataCharacteristic!.isNotifying) {
         await _dataCharacteristic!.setNotifyValue(true);
       }
     } catch (e) {

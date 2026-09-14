@@ -1340,7 +1340,6 @@ class MovementTestController {
     _calibrationSubscription = null;
 
     await sensorService.stop();
-    await sensorService.dispose();
 
     _kneeMotionProcessor?.reset();
     _kneeMotionProcessor = null;

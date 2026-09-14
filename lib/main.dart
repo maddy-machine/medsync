@@ -381,12 +381,6 @@ class _ScreeningHomePageState
     if (controller != null) {
       await controller.dispose();
     }
-
-    // Null out the cached BLE service after every workflow so the next
-    // run creates a fresh BleSensorService with an open StreamController.
-    // Without this, the disposed service (with a closed stream) is reused
-    // and no samples are ever delivered to the calibration listener.
-    _bleSensorService = null;
   }
 
   @override
