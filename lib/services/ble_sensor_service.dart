@@ -621,6 +621,10 @@ class BleSensorService implements SensorService {
     _rxBuffer.clear();
     _packetLogCount = 0;
 
+    // Small 250ms settling delay allows the ESP32 BLE stack to settle
+    // if a STOP command was sent immediately prior (e.g. on test cancel).
+    await Future.delayed(const Duration(milliseconds: 250));
+
     try {
       if (_dataCharacteristic != null) {
         await _dataCharacteristic!.setNotifyValue(true);
@@ -642,11 +646,17 @@ class BleSensorService implements SensorService {
   Future<void> stop() async {
     if (!isConnected) {
       _isRunning = false;
+      _rxBuffer.clear();
       return;
     }
 
-    await _sendCommand('STOP');
+    try {
+      await _sendCommand('STOP');
+    } catch (e) {
+      debugPrint('[MedSync-BLE] Warning sending STOP command: $e');
+    }
 
+    _rxBuffer.clear();
     _isRunning = false;
 
     _setStatus(
