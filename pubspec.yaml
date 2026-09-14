@@ -1,0 +1,32 @@
+name: medsync_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_localizations:
+    sdk: flutter
+
+  flutter_blue_plus: ^2.2.0
+  cupertino_icons: ^1.0.8
+  pdf: ^3.11.3
+  path_provider: ^2.1.5
+  permission_handler: ^13.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/models/koa_vs_healthy_v1_models.json

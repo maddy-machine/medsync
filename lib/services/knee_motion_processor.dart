@@ -1,0 +1,1 @@
+export '../analysis/knee_motion_processor.dart';
