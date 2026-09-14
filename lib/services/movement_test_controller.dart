@@ -383,6 +383,17 @@ class MovementTestController {
       await Future<void>.delayed(
         const Duration(seconds: 1),
       );
+
+      // Auto-recovery check: if 0 samples received after 1 second of calibration,
+      // re-trigger sensorService.start() to recover from missed BLE start commands.
+      if (i == 2 && calSampleCount == 0) {
+        debugPrint('[MedSync] ⚠️ 0 calibration samples received after 1s. Re-triggering sensorService.start()...');
+        try {
+          await sensorService.start();
+        } catch (e) {
+          debugPrint('[MedSync] ⚠️ Retry start exception: $e');
+        }
+      }
     }
 
     // Cancel the calibration listener (stream stays running for recording).

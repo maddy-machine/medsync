@@ -621,6 +621,14 @@ class BleSensorService implements SensorService {
     _rxBuffer.clear();
     _packetLogCount = 0;
 
+    try {
+      if (_dataCharacteristic != null) {
+        await _dataCharacteristic!.setNotifyValue(true);
+      }
+    } catch (e) {
+      debugPrint('[MedSync-BLE] Warning re-enabling notify: $e');
+    }
+
     await _sendCommand('START');
 
     _isRunning = true;

@@ -116,21 +116,24 @@ class KoaFeatureExtractor {
       shinGyroscope.values,
     );
 
-    final age =
-        patientAssessment.age?.toDouble() ?? 0.0;
+    // Impute dataset population means when patient age or BMI are unspecified
+    // (Age mean = 44.38047, BMI mean = 24.56027) so missing demographics
+    // provide a neutral Z-score (0.0) rather than an extreme negative outlier.
+    final age = (patientAssessment.age != null && patientAssessment.age! > 0)
+        ? patientAssessment.age!.toDouble()
+        : 44.38047;
 
-    final bmi =
-        patientAssessment.bmi;
+    final rawBmi = patientAssessment.bmi;
+    final bmi = (rawBmi != null && rawBmi.isFinite && rawBmi > 0)
+        ? rawBmi
+        : 24.56027;
 
     final durationSeconds =
         _durationSeconds(samples);
 
     final values = <String, double>{
       'age': _finiteOrZero(age),
-
-      'bmi': bmi != null && bmi.isFinite
-          ? bmi
-          : 0.0,
+      'bmi': _finiteOrZero(bmi),
 
       'duration_seconds':
           _finiteOrZero(durationSeconds),
