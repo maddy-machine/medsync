@@ -1,6 +1,7 @@
 enum MovementTestType {
   chairStand,
   fastWalk,
+  cameraVision,
 }
 
 class MovementTest {
@@ -33,3 +34,11 @@ const fastWalkTest = MovementTest(
       'Press FINISH TEST immediately after completing the 20 m walk.',
   duration: Duration(seconds: 120),
 );
+
+const cameraVisionTest = MovementTest(
+  type: MovementTestType.cameraVision,
+  name: 'AI Camera Vision Screening',
+  description:
+      '10-second camera posture, bilateral symmetry, and knee kinematic assessment.',
+  duration: Duration(seconds: 10),
+);

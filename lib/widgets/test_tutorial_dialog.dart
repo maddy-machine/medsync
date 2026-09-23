@@ -36,27 +36,39 @@ class TestTutorialDialog extends StatelessWidget {
     final colors = theme.colorScheme;
     final l10n = AppLocalizations.of(context);
 
+    final isCameraVision = testType == MovementTestType.cameraVision;
     final isChairStand = testType == MovementTestType.chairStand;
 
-    final title = isChairStand
-        ? l10n.get('chairStand')
-        : l10n.get('fastWalk20m');
+    final title = isCameraVision
+        ? 'AI Camera Vision Screening'
+        : isChairStand
+            ? l10n.get('chairStand')
+            : l10n.get('fastWalk20m');
 
-    final description = isChairStand
-        ? l10n.get('chairStandTutorialDesc')
-        : l10n.get('fastWalkTutorialDesc');
+    final description = isCameraVision
+        ? 'Position yourself in front of the camera. The AI will analyze your posture, gait symmetry, and knee kinematics.'
+        : isChairStand
+            ? l10n.get('chairStandTutorialDesc')
+            : l10n.get('fastWalkTutorialDesc');
 
-    final step1 = isChairStand
-        ? l10n.get('chairStandStep1')
-        : l10n.get('fastWalkStep1');
+    final step1 = isCameraVision
+        ? 'Stand 2–3 meters back so full body is visible'
+        : isChairStand
+            ? l10n.get('chairStandStep1')
+            : l10n.get('fastWalkStep1');
 
-    final step2 = isChairStand
-        ? l10n.get('chairStandStep2')
-        : l10n.get('fastWalkStep2');
+    final step2 = isCameraVision
+        ? 'Perform gentle movement (knee bend or walking in place)'
+        : isChairStand
+            ? l10n.get('chairStandStep2')
+            : l10n.get('fastWalkStep2');
 
-    final step3 = isChairStand
-        ? l10n.get('chairStandStep3')
-        : l10n.get('fastWalkStep3');
+    final step3 = isCameraVision
+        ? 'Hold position for 10 seconds while AI processes video'
+        : isChairStand
+            ? l10n.get('chairStandStep3')
+            : l10n.get('fastWalkStep3');
+
 
     return Container(
       decoration: BoxDecoration(

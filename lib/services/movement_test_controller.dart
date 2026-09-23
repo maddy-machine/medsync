@@ -13,6 +13,7 @@ import '../analysis/knee_angle_features.dart';
 import '../analysis/knee_motion_processor.dart';
 import '../analysis/koa_feature_extractor.dart';
 import '../analysis/movement_features.dart';
+import '../models/camera_vision_result.dart';
 import '../models/movement_test.dart';
 import '../models/patient_assessment.dart';
 import '../models/screening_result.dart';
@@ -81,6 +82,7 @@ class MovementTestController {
   MovementFeatureVector? combinedFeatures;
 
   ScreeningResult? screeningResult;
+  CameraVisionResult? cameraVisionResult;
 
   final ScreeningSessionState screeningSession =
       ScreeningSessionState();
@@ -174,6 +176,15 @@ class MovementTestController {
     _notifyChanged();
   }
 
+  void setCameraVisionResult(
+    CameraVisionResult? result,
+  ) {
+    cameraVisionResult = result;
+    screeningSession.hasCameraVision =
+        result != null;
+    _notifyChanged();
+  }
+
   Future<void> startNewScreening() async {
     if (isBusy) {
       return;
@@ -203,6 +214,7 @@ class MovementTestController {
     combinedFeatures = null;
 
     screeningResult = null;
+    cameraVisionResult = null;
 
     _kneeMotionProcessor?.reset();
     _kneeMotionProcessor = null;
@@ -1353,10 +1365,12 @@ class MovementTestController {
 class ScreeningSessionState {
   bool hasChairStand = false;
   bool hasFastWalk = false;
+  bool hasCameraVision = false;
 
   void reset() {
     hasChairStand = false;
     hasFastWalk = false;
+    hasCameraVision = false;
   }
 }
 

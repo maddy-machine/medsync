@@ -45,15 +45,20 @@ class _TestInstructionAnimationState
           return _ChairStandAnimation(
             progress: _animationController.value,
           );
+        } else if (widget.type == MovementTestType.fastWalk) {
+          return _FastWalkAnimation(
+            progress: _animationController.value,
+          );
         }
 
-        return _FastWalkAnimation(
+        return _CameraVisionAnimation(
           progress: _animationController.value,
         );
       },
     );
   }
 }
+
 
 class _ChairStandAnimation extends StatelessWidget {
   final double progress;
@@ -769,3 +774,102 @@ class _PersonGaitPainter extends CustomPainter {
         oldDelegate.legSwing != legSwing;
   }
 }
+
+class _CameraVisionAnimation extends StatelessWidget {
+  final double progress;
+
+  const _CameraVisionAnimation({
+    required this.progress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scanOffset = math.sin(progress * math.pi * 2);
+
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _GridPainter(
+                color: const Color(0xFF38BDF8),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 14,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.videocam_rounded, size: 14, color: Color(0xFF38BDF8)),
+                  SizedBox(width: 5),
+                  Text(
+                    'AI KINEMATICS (10S)',
+                    style: TextStyle(
+                      color: Color(0xFF38BDF8),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            right: 14,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'LIVE SKELETON',
+                style: TextStyle(
+                  color: Color(0xFF10B981),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.accessibility_new_rounded,
+                  size: 56,
+                  color: Color.lerp(const Color(0xFF38BDF8), const Color(0xFF34D399), (scanOffset + 1) / 2),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Align posture in camera frame',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

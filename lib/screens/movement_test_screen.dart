@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
+import '../models/camera_vision_result.dart';
 import '../models/imu_data.dart';
 import '../models/movement_test.dart';
 import '../models/patient_assessment.dart';
@@ -12,6 +13,7 @@ import '../models/test_state.dart';
 import '../services/movement_test_controller.dart';
 import '../widgets/test_instruction_animation.dart';
 import '../widgets/test_tutorial_dialog.dart';
+import 'camera_vision_test_screen.dart';
 
 class MovementTestScreen extends StatefulWidget {
   final MovementTestController controller;
@@ -80,6 +82,27 @@ AppLocalizations get _l10n =>
 
   bool get _fastWalkComplete =>
       widget.controller.screeningSession.hasFastWalk;
+
+  bool get _cameraVisionComplete =>
+      widget.controller.screeningSession.hasCameraVision;
+
+  CameraVisionResult? get _cameraResult =>
+      widget.controller.cameraVisionResult;
+
+  Future<void> _openCameraVisionTest() async {
+    final result = await Navigator.of(context).push<CameraVisionResult>(
+      MaterialPageRoute(
+        builder: (_) => CameraVisionTestScreen(
+          patientAssessment: widget.assessment,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      widget.controller.setCameraVisionResult(result);
+      setState(() {});
+    }
+  }
 
   Future<void> _startCurrentTest() async {
     if (_starting || widget.controller.isBusy) {
@@ -307,35 +330,54 @@ AppLocalizations get _l10n =>
         Row(
           children: [
             Expanded(
-              child: _buildProgressItem(
-                colors,
-                number: '01',
-                title: _l.get('chairStand'),
-                completed: firstComplete,
-                active:
-                    _currentType ==
-                        MovementTestType.chairStand,
+              child: GestureDetector(
+                onTap: () => setState(() => _currentType = MovementTestType.chairStand),
+                child: _buildProgressItem(
+                  colors,
+                  number: '01',
+                  title: _l.get('chairStand'),
+                  completed: firstComplete,
+                  active: _currentType == MovementTestType.chairStand,
+                ),
               ),
             ),
 
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
 
             Expanded(
-              child: _buildProgressItem(
-                colors,
-                number: '02',
-                title: _l.get('fastWalk'),
-                completed: secondComplete,
-                active:
-                    _currentType ==
-                        MovementTestType.fastWalk,
+              child: GestureDetector(
+                onTap: () => setState(() => _currentType = MovementTestType.fastWalk),
+                child: _buildProgressItem(
+                  colors,
+                  number: '02',
+                  title: _l.get('fastWalk'),
+                  completed: secondComplete,
+                  active: _currentType == MovementTestType.fastWalk,
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 6),
+
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _currentType = MovementTestType.cameraVision),
+                child: _buildProgressItem(
+                  colors,
+                  number: '03',
+                  title: 'Camera Vision',
+                  completed: _cameraVisionComplete,
+                  active: _currentType == MovementTestType.cameraVision,
+                ),
               ),
             ),
           ],
         ),
+
       ],
     );
   }
+
 
   Widget _buildProgressItem(
     ColorScheme colors, {
@@ -539,9 +581,34 @@ AppLocalizations get _l10n =>
     ThemeData theme,
     ColorScheme colors,
   ) {
+    final isCameraVision =
+        _currentType == MovementTestType.cameraVision;
     final isChairStand =
-        _currentType ==
-            MovementTestType.chairStand;
+        _currentType == MovementTestType.chairStand;
+
+    final title = isCameraVision
+        ? 'AI Camera Vision Screening'
+        : isChairStand
+            ? _l.get('chairStand')
+            : _l.get('fastWalk20m');
+
+    final subtitle = isCameraVision
+        ? '10-Second Kinematic & Posture Analysis'
+        : isChairStand
+            ? _l.get('lowerLimbFunctionalAssessment')
+            : _l.get('fastPacedWalkingAssessment');
+
+    final iconData = isCameraVision
+        ? Icons.videocam_rounded
+        : isChairStand
+            ? Icons.chair_rounded
+            : Icons.directions_walk_rounded;
+
+    final instruction = isCameraVision
+        ? 'Stand 2–3 meters back from the camera so your full body is visible. Perform gentle movement for 10 seconds while AI tracks your pose.'
+        : isChairStand
+            ? _l.get('chairStandInstruction')
+            : _l.get('fastWalkInstruction');
 
     return Container(
       width: double.infinity,
@@ -576,16 +643,17 @@ AppLocalizations get _l10n =>
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color:
-                      colors.primaryContainer,
+                  color: isCameraVision
+                      ? colors.secondaryContainer
+                      : colors.primaryContainer,
                   borderRadius:
                       BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  isChairStand
-                      ? Icons.chair_rounded
-                      : Icons.directions_walk_rounded,
-                  color: colors.primary,
+                  iconData,
+                  color: isCameraVision
+                      ? colors.secondary
+                      : colors.primary,
                   size: 27,
                 ),
               ),
@@ -598,9 +666,7 @@ AppLocalizations get _l10n =>
                       CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isChairStand
-                          ? _l.get('chairStand')
-                          : _l.get('fastWalk20m'),
+                      title,
                       style: theme.textTheme
                           .titleLarge
                           ?.copyWith(
@@ -613,13 +679,7 @@ AppLocalizations get _l10n =>
                     const SizedBox(height: 3),
 
                     Text(
-                      isChairStand
-                          ? _l.get(
-                              'lowerLimbFunctionalAssessment',
-                            )
-                          : _l.get(
-                              'fastPacedWalkingAssessment',
-                            ),
+                      subtitle,
                       style: theme.textTheme
                           .bodySmall
                           ?.copyWith(
@@ -695,7 +755,7 @@ AppLocalizations get _l10n =>
               children: [
                 Icon(
                   Icons.info_outline_rounded,
-                  color: colors.primary,
+                  color: isCameraVision ? colors.secondary : colors.primary,
                   size: 20,
                 ),
 
@@ -703,13 +763,7 @@ AppLocalizations get _l10n =>
 
                 Expanded(
                   child: Text(
-                    isChairStand
-                        ? _l.get(
-                            'chairStandInstruction',
-                          )
-                        : _l.get(
-                            'fastWalkInstruction',
-                          ),
+                    instruction,
                     style: theme.textTheme
                         .bodySmall
                         ?.copyWith(
@@ -726,6 +780,7 @@ AppLocalizations get _l10n =>
       ),
     );
   }
+
 
   Widget _buildLiveCard(
     ThemeData theme,
@@ -1115,6 +1170,38 @@ AppLocalizations get _l10n =>
     ThemeData theme,
     ColorScheme colors,
   ) {
+    if (_currentType == MovementTestType.cameraVision) {
+      return Column(
+        children: [
+          _buildCameraVisionBanner(theme, colors),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: FilledButton.icon(
+              onPressed: _finishWorkflow,
+              icon: const Icon(
+                Icons.auto_awesome_rounded,
+              ),
+              label: Text(
+                _l10n.get(
+                  'viewScreeningResults',
+                ),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(17),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     final hasStarted =
         widget.controller.screeningStarted;
 
@@ -1291,71 +1378,153 @@ AppLocalizations get _l10n =>
 
         const SizedBox(height: 14),
 
-        if (chairDone)
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton.icon(
-              onPressed: () {
-                setState(() {
-                  _currentType =
-                      MovementTestType.fastWalk;
-                });
-              },
-              icon: const Icon(
-                Icons.arrow_forward_rounded,
-              ),
-              label: Text(
-                '${_l10n.get('next')} ${_l10n.get('fastWalk20m')}',
-                style: const TextStyle(
-                  fontWeight:
-                      FontWeight.w700,
-                ),
-              ),
-              style:
-                  FilledButton.styleFrom(
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    17,
-                  ),
-                ),
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: FilledButton.icon(
+            onPressed: () {
+              setState(() {
+                _currentType = chairDone
+                    ? MovementTestType.fastWalk
+                    : MovementTestType.cameraVision;
+              });
+            },
+            icon: const Icon(
+              Icons.arrow_forward_rounded,
+            ),
+            label: Text(
+              chairDone
+                  ? '${_l10n.get('next')} ${_l10n.get('fastWalk20m')}'
+                  : 'Next: Camera Vision Screening',
+              style: const TextStyle(
+                fontWeight:
+                    FontWeight.w700,
               ),
             ),
-          )
-        else
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton.icon(
-              onPressed:
-                  _finishWorkflow,
-              icon: const Icon(
-                Icons.auto_awesome_rounded,
-              ),
-              label: Text(
-                _l10n.get(
-                  'viewScreeningResults',
-                ),
-                style: const TextStyle(
-                  fontWeight:
-                      FontWeight.w700,
-                ),
-              ),
-              style:
-                  FilledButton.styleFrom(
-                shape:
-                    RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.circular(
-                    17,
-                  ),
+            style:
+                FilledButton.styleFrom(
+              shape:
+                  RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(
+                  17,
                 ),
               ),
             ),
           ),
+        ),
       ],
+    );
+  }
+
+
+  Widget _buildCameraVisionBanner(
+    ThemeData theme,
+    ColorScheme colors,
+  ) {
+    final cameraDone = _cameraVisionComplete;
+    final res = _cameraResult;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: cameraDone
+              ? const Color(0xFF10B981).withValues(alpha: 0.5)
+              : colors.primary.withValues(alpha: 0.35),
+          width: 1.4,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: cameraDone
+                      ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                      : colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  cameraDone ? Icons.check_circle_rounded : Icons.videocam_rounded,
+                  color: cameraDone ? const Color(0xFF10B981) : colors.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Camera Vision Test',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'AI Vision',
+                            style: TextStyle(
+                              color: Color(0xFF0284C7),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      cameraDone
+                          ? 'Posture: ${res?.postureScore.toStringAsFixed(0)}/100 • Symmetry: ${((res?.gaitSymmetryIndex ?? 0) * 100).toStringAsFixed(0)}%'
+                          : 'Optional 10-second capture of posture & gait kinematics',
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openCameraVisionTest,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colors.primary,
+                side: BorderSide(color: colors.primary.withValues(alpha: 0.4)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: Icon(cameraDone ? Icons.refresh_rounded : Icons.camera_alt_outlined, size: 18),
+              label: Text(
+                cameraDone ? 'Retake Vision Screening' : 'Start Camera Vision Test (Optional)',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

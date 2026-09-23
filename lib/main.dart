@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'localization/app_localizations.dart';
 import 'models/patient_assessment.dart';
 import 'models/screening_model.dart';
+import 'screens/camera_vision_test_screen.dart';
 import 'screens/movement_test_screen.dart';
 import 'screens/patient_assessment_screen.dart';
 import 'screens/sensor_setup_screen.dart';
@@ -15,6 +16,7 @@ import 'services/movement_test_controller.dart';
 import 'services/screening_model_loader.dart';
 import 'services/screening_inference_service.dart';
 import 'services/sensor_service.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -245,7 +247,18 @@ class _ScreeningHomePageState
         MockSensorService();
   }
 
+  Future<void> _openDirectCameraVision() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CameraVisionTestScreen(
+          patientAssessment: _assessment,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAssessment() async {
+
     final result =
         await Navigator.of(context).push<
             PatientAssessment>(
@@ -431,7 +444,15 @@ class _ScreeningHomePageState
                 l10n,
               ),
 
+              const SizedBox(height: 14),
+
+              _buildCameraVisionQuickCard(
+                context,
+                colors,
+              ),
+
               const SizedBox(height: 24),
+
 
               Text(
                 l10n.get('howItWorks'),
@@ -797,7 +818,117 @@ class _ScreeningHomePageState
     );
   }
 
+  Widget _buildCameraVisionQuickCard(
+    BuildContext context,
+    ColorScheme colors,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: colors.secondary.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colors.secondary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: colors.secondaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.videocam_rounded,
+              color: colors.secondary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'AI Camera Vision',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.secondary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'NEW',
+                        style: TextStyle(
+                          color: colors.secondary,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '10-sec posture & movement analysis',
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: _openDirectCameraVision,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colors.secondary,
+              side: BorderSide(color: colors.secondary),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 8,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Test Now',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStepCard(
+
     BuildContext context, {
     required String number,
     required IconData icon,
