@@ -148,9 +148,7 @@ AppLocalizations get _l10n =>
     if (_currentType ==
             MovementTestType.fastWalk &&
         _fastWalkComplete) {
-      setState(() {
-        _finished = true;
-      });
+      return;
     }
   }
 
@@ -1175,29 +1173,31 @@ AppLocalizations get _l10n =>
         children: [
           _buildCameraVisionBanner(theme, colors),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: FilledButton.icon(
-              onPressed: _finishWorkflow,
-              icon: const Icon(
-                Icons.auto_awesome_rounded,
-              ),
-              label: Text(
-                _l10n.get(
-                  'viewScreeningResults',
+          if (_cameraVisionComplete)
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: FilledButton.icon(
+                onPressed: _finishWorkflow,
+                icon: const Icon(
+                  Icons.auto_awesome_rounded,
                 ),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
+                label: Text(
+                  _l10n.get(
+                    'viewScreeningResults',
+                  ),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(17),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F766E),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(17),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       );
     }
@@ -1424,10 +1424,11 @@ AppLocalizations get _l10n =>
   ) {
     final cameraDone = _cameraVisionComplete;
     final res = _cameraResult;
+    final pose = widget.controller.poseEstimationResult;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -1444,8 +1445,8 @@ AppLocalizations get _l10n =>
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: cameraDone
                       ? const Color(0xFF10B981).withValues(alpha: 0.12)
@@ -1455,7 +1456,7 @@ AppLocalizations get _l10n =>
                 child: Icon(
                   cameraDone ? Icons.check_circle_rounded : Icons.videocam_rounded,
                   color: cameraDone ? const Color(0xFF10B981) : colors.primary,
-                  size: 22,
+                  size: 24,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1466,7 +1467,7 @@ AppLocalizations get _l10n =>
                     Row(
                       children: [
                         Text(
-                          'Camera Vision Test',
+                          'AI Camera Vision Screening',
                           style: theme.textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
@@ -1479,7 +1480,7 @@ AppLocalizations get _l10n =>
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
-                            'AI Vision',
+                            'Step 3/3',
                             style: TextStyle(
                               color: Color(0xFF0284C7),
                               fontSize: 10,
@@ -1492,8 +1493,8 @@ AppLocalizations get _l10n =>
                     const SizedBox(height: 2),
                     Text(
                       cameraDone
-                          ? 'Posture: ${res?.postureScore.toStringAsFixed(0)}/100 • Symmetry: ${((res?.gaitSymmetryIndex ?? 0) * 100).toStringAsFixed(0)}%'
-                          : 'Optional 10-second capture of posture & gait kinematics',
+                          ? 'Posture: ${res?.postureScore.toStringAsFixed(0)}/100 • Valgus: ${pose != null ? "${pose.kneeValgusAngle.toStringAsFixed(1)}°" : "Computed"}'
+                          : '10-second video capture for YOLOv8-Pose tracking & Multimodal Fusion',
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontSize: 12,
@@ -1504,24 +1505,40 @@ AppLocalizations get _l10n =>
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _openCameraVisionTest,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: colors.primary,
-                side: BorderSide(color: colors.primary.withValues(alpha: 0.4)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: Icon(cameraDone ? Icons.refresh_rounded : Icons.camera_alt_outlined, size: 18),
-              label: Text(
-                cameraDone ? 'Retake Vision Screening' : 'Start Camera Vision Test (Optional)',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-            ),
+            height: 48,
+            child: cameraDone
+                ? OutlinedButton.icon(
+                    onPressed: _openCameraVisionTest,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: colors.primary,
+                      side: BorderSide(color: colors.primary.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text(
+                      'Retake Camera Vision Screening',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                  )
+                : FilledButton.icon(
+                    onPressed: _openCameraVisionTest,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F766E),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                    label: const Text(
+                      'Start AI Camera Vision Test',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -1955,9 +1972,7 @@ AppLocalizations get _l10n =>
               const SizedBox(height: 14),
 
               Text(
-                _l10n.get(
-                  'movementAssessmentComplete',
-                ),
+                'All 3 Screening Tests Complete',
                 textAlign: TextAlign.center,
                 style: theme.textTheme
                     .titleLarge
@@ -1970,9 +1985,7 @@ AppLocalizations get _l10n =>
               const SizedBox(height: 6),
 
               Text(
-                _l10n.get(
-                  'bothTestsRecorded',
-                ),
+                'Chair Stand, Fast Walk & AI Camera Vision recorded successfully.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme
                     .bodySmall

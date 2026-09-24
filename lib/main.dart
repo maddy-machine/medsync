@@ -1,41 +1,23 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'package:flutter/cupertino.dart';
 import 'localization/app_localizations.dart';
 import 'models/patient_assessment.dart';
-import 'models/screening_model.dart';
-import 'screens/camera_vision_test_screen.dart';
 import 'screens/movement_test_screen.dart';
 import 'screens/patient_assessment_screen.dart';
-import 'screens/sensor_setup_screen.dart';
 import 'screens/screening_results_screen.dart';
+import 'screens/sensor_setup_screen.dart';
 import 'services/ble_sensor_service.dart';
 import 'services/mock_sensor_service.dart';
 import 'services/movement_test_controller.dart';
-import 'services/screening_model_loader.dart';
-import 'services/screening_inference_service.dart';
 import 'services/sensor_service.dart';
-
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  ScreeningModel? screeningModel;
-
-  try {
-    screeningModel =
-        await const ScreeningModelLoader().load();
-  } catch (error) {
-    debugPrint(
-      'Screening model could not be loaded: $error',
-    );
-  }
-
   runApp(
-    MedSyncApp(
-      screeningModel: screeningModel,
-    ),
+    const MedSyncApp(),
   );
 }
 
@@ -145,12 +127,7 @@ class MedSyncCupertinoLocalizationsDelegate
 }
 
 class MedSyncApp extends StatefulWidget {
-  final ScreeningModel? screeningModel;
-
-  const MedSyncApp({
-    super.key,
-    required this.screeningModel,
-  });
+  const MedSyncApp({super.key});
 
   @override
   State<MedSyncApp> createState() => _MedSyncAppState();
@@ -202,7 +179,6 @@ class _MedSyncAppState extends State<MedSyncApp> {
       ),
 
       home: ScreeningHomePage(
-        screeningModel: widget.screeningModel,
         onLanguageChanged: _changeLanguage,
       ),
     );
@@ -210,12 +186,10 @@ class _MedSyncAppState extends State<MedSyncApp> {
 }
 
 class ScreeningHomePage extends StatefulWidget {
-  final ScreeningModel? screeningModel;
   final ValueChanged<String> onLanguageChanged;
 
   const ScreeningHomePage({
     super.key,
-    required this.screeningModel,
     required this.onLanguageChanged,
   });
 
@@ -245,16 +219,6 @@ class _ScreeningHomePageState
   MockSensorService _getMockService() {
     return _mockSensorService ??=
         MockSensorService();
-  }
-
-  Future<void> _openDirectCameraVision() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CameraVisionTestScreen(
-          patientAssessment: _assessment,
-        ),
-      ),
-    );
   }
 
   Future<void> _openAssessment() async {
@@ -329,10 +293,6 @@ class _ScreeningHomePageState
     final controller =
         MovementTestController(
       sensorService: sensorService,
-      screeningInferenceService:
-          ScreeningInferenceService(
-        model: widget.screeningModel,
-      ),
     );
 
     controller.updatePatientAssessment(
@@ -442,13 +402,6 @@ class _ScreeningHomePageState
                 context,
                 colors,
                 l10n,
-              ),
-
-              const SizedBox(height: 14),
-
-              _buildCameraVisionQuickCard(
-                context,
-                colors,
               ),
 
               const SizedBox(height: 24),
@@ -818,114 +771,7 @@ class _ScreeningHomePageState
     );
   }
 
-  Widget _buildCameraVisionQuickCard(
-    BuildContext context,
-    ColorScheme colors,
-  ) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: colors.secondary.withValues(alpha: 0.35),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: colors.secondary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: colors.secondaryContainer,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              Icons.videocam_rounded,
-              color: colors.secondary,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'AI Camera Vision',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.secondary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'NEW',
-                        style: TextStyle(
-                          color: colors.secondary,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '10-sec posture & movement analysis',
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          OutlinedButton(
-            onPressed: _openDirectCameraVision,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colors.secondary,
-              side: BorderSide(color: colors.secondary),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 8,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              'Test Now',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildStepCard(
 

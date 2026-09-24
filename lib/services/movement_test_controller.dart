@@ -14,20 +14,32 @@ import '../analysis/knee_motion_processor.dart';
 import '../analysis/koa_feature_extractor.dart';
 import '../analysis/movement_features.dart';
 import '../models/camera_vision_result.dart';
+import '../models/fused_risk_result.dart';
+import '../models/imu_embedding.dart';
 import '../models/movement_test.dart';
 import '../models/patient_assessment.dart';
+import '../models/pose_estimation_result.dart';
 import '../models/screening_result.dart';
 import '../models/sensor_sample.dart';
 import '../models/sensor_session.dart';
 import '../models/test_state.dart';
 import '../validation/sensor_validator.dart';
-import 'screening_inference_service.dart';
+import 'fusion_inference_service.dart';
+import 'patchtst_sensor_encoder.dart';
+import 'pose_estimation_service.dart';
 import 'sensor_service.dart';
 
 class MovementTestController {
   final SensorService sensorService;
 
-  final ScreeningInferenceService screeningInferenceService;
+  /// Cross-modal attention fusion layer (YOLOv8-Pose + PatchTST).
+  final FusionInferenceService fusionInferenceService;
+
+  /// YOLOv8-Pose vision branch.
+  final PoseEstimationService poseEstimationService;
+
+  /// PatchTST sensor transformer branch.
+  final PatchTSTSensorEncoder sensorEncoder;
 
   StreamSubscription<SensorSample>? _subscription;
   StreamSubscription<SensorSample>? _calibrationSubscription;
@@ -84,6 +96,11 @@ class MovementTestController {
   ScreeningResult? screeningResult;
   CameraVisionResult? cameraVisionResult;
 
+  // Fusion pipeline results
+  PoseEstimationResult? poseEstimationResult;
+  ImuEmbedding? imuEmbedding;
+  FusedRiskResult? fusedRiskResult;
+
   final ScreeningSessionState screeningSession =
       ScreeningSessionState();
 
@@ -107,10 +124,15 @@ class MovementTestController {
 
   MovementTestController({
     required this.sensorService,
-    ScreeningInferenceService? screeningInferenceService,
-  }) : screeningInferenceService =
-            screeningInferenceService ??
-                const ScreeningInferenceService();
+    FusionInferenceService? fusionInferenceService,
+    PoseEstimationService? poseEstimationService,
+    PatchTSTSensorEncoder? sensorEncoder,
+  })  : fusionInferenceService =
+            fusionInferenceService ?? FusionInferenceService(),
+        poseEstimationService =
+            poseEstimationService ?? const StubYoloV8PoseService(),
+        sensorEncoder =
+            sensorEncoder ?? PatchTSTSensorEncoder();
 
   TestState get state => _state;
 
@@ -183,6 +205,13 @@ class MovementTestController {
     screeningSession.hasCameraVision =
         result != null;
     _notifyChanged();
+
+    if (result != null) {
+      processCameraVisionResult(
+        legacyResult: result,
+        videoPath: result.videoPath ?? '',
+      );
+    }
   }
 
   Future<void> startNewScreening() async {
@@ -215,6 +244,9 @@ class MovementTestController {
 
     screeningResult = null;
     cameraVisionResult = null;
+    poseEstimationResult = null;
+    imuEmbedding = null;
+    fusedRiskResult = null;
 
     _kneeMotionProcessor?.reset();
     _kneeMotionProcessor = null;
@@ -733,46 +765,123 @@ class MovementTestController {
   void _runAiScreeningIfReady() {
     if (!screeningSession.hasChairStand ||
         !screeningSession.hasFastWalk) {
-      screeningResult = null;
+      fusedRiskResult = null;
       return;
     }
 
-    final features =
-        combinedFeatures;
+    final samples = session?.samples ?? <SensorSample>[];
+    if (samples.isEmpty) {
+      fusedRiskResult = null;
+      return;
+    }
 
-    if (features == null) {
-      screeningResult = null;
+    // Encode IMU window via PatchTST sensor branch (synchronous).
+    try {
+      imuEmbedding = sensorEncoder.encode(samples);
+      debugPrint(
+        '[MedSync-Fusion] PatchTST embedding computed. '
+        'microTremor=${imuEmbedding!.microTremorScore.toStringAsFixed(3)} '
+        'gaitIrregularity=${imuEmbedding!.gaitIrregularityScore.toStringAsFixed(3)}',
+      );
+    } catch (error) {
+      debugPrint('[MedSync-Fusion] PatchTST encoding failed: $error');
+      imuEmbedding = null;
+    }
+
+    // Run fusion if both branches are available.
+    _computeFusedRiskIfReady();
+  }
+
+  /// Runs cross-modal fusion when both pose and IMU embeddings are available.
+  void _computeFusedRiskIfReady() {
+    final pose = poseEstimationResult;
+    final imu = imuEmbedding;
+
+    if (pose == null || imu == null) {
+      // Fusion cannot proceed with only one modality.
+      debugPrint(
+        '[MedSync-Fusion] Waiting for both modalities. '
+        'pose=${pose != null} imu=${imu != null}',
+      );
       return;
     }
 
     try {
-      screeningResult =
-          screeningInferenceService
-              .evaluate(
-        features,
+      fusedRiskResult = fusionInferenceService.fuse(
+        poseResult: pose,
+        imuEmbedding: imu,
+        patientAssessment: _patientAssessment,
       );
-    } catch (error) {
-      screeningResult =
-          ScreeningResult(
-        riskLevel:
-            ScreeningRiskLevel.unavailable,
-        probability: null,
-        threshold: null,
-        modelAvailable: false,
-        modelVersion:
-            'INFERENCE_ERROR',
-        contributingFactors: [],
+
+      // Keep screeningResult in sync as a compatibility shim for any UI
+      // that still reads the old field (reads risk level + explanation).
+      screeningResult = ScreeningResult(
+        riskLevel: fusedRiskResult!.riskLevel,
+        probability: fusedRiskResult!.fusedRiskScore,
+        threshold: fusionInferenceService.higherRiskThreshold,
+        modelAvailable: true,
+        modelVersion: FusionInferenceService.fusionMethodId,
+        contributingFactors: fusedRiskResult!.insights.take(5).toList(),
         explanation:
-            'The AI screening pipeline could '
-            'not safely evaluate the collected '
-            'features.',
+            'Fused YOLOv8-Pose + PatchTST cross-modal assessment. '
+            'Confidence: ${fusedRiskResult!.fusionConfidencePercent}%. '
+            'Modality agreement: ${fusedRiskResult!.modalityAgreementPercent}%.',
         recommendation:
-            'Clinical evaluation is recommended. '
-            'AI screening is unavailable for '
-            'this assessment.',
+            'This is an AI-assisted preliminary screening result, '
+            'not a diagnosis. Clinical evaluation is recommended.',
       );
+
+      screeningSession.hasFusedResult = true;
+
+      debugPrint(
+        '[MedSync-Fusion] Fusion complete. '
+        'risk=${fusedRiskResult!.riskLevel.name} '
+        'score=${fusedRiskResult!.fusedRiskScore.toStringAsFixed(3)} '
+        'confidence=${fusedRiskResult!.fusionConfidence.toStringAsFixed(3)}',
+      );
+
+      _notifyChanged();
+    } catch (error) {
+      debugPrint('[MedSync-Fusion] Fusion failed: $error');
+      fusedRiskResult = null;
     }
   }
+
+  /// Called from the UI after the camera vision test completes.
+  ///
+  /// Stores the legacy [CameraVisionResult] and also triggers a YOLOv8-Pose
+  /// estimation on the same video, then re-runs fusion when done.
+  Future<void> processCameraVisionResult({
+    required CameraVisionResult legacyResult,
+    required String videoPath,
+  }) async {
+    // Keep legacy result for backward-compatible UI rendering.
+    cameraVisionResult = legacyResult;
+    screeningSession.hasCameraVision = true;
+    _notifyChanged();
+
+    // Run YOLOv8-Pose on the same video (async, does not block UI).
+    try {
+      final pose = await poseEstimationService.estimatePose(
+        videoPath: videoPath,
+        patientAssessment: _patientAssessment,
+      );
+      poseEstimationResult = pose;
+      screeningSession.hasPoseEstimation = true;
+      debugPrint(
+        '[MedSync-Fusion] Pose estimated. '
+        'valgus=${pose.kneeValgusAngle.toStringAsFixed(1)}° '
+        'confidence=${pose.overallPoseConfidence.toStringAsFixed(3)}',
+      );
+    } catch (error) {
+      debugPrint('[MedSync-Fusion] Pose estimation failed: $error');
+      poseEstimationResult = null;
+    }
+
+    // Re-run fusion with new pose result.
+    _computeFusedRiskIfReady();
+  }
+
 
   // ------------------------------------------------------------
   // TEST QUALITY CALCULATION
@@ -1366,11 +1475,15 @@ class ScreeningSessionState {
   bool hasChairStand = false;
   bool hasFastWalk = false;
   bool hasCameraVision = false;
+  bool hasPoseEstimation = false;
+  bool hasFusedResult = false;
 
   void reset() {
     hasChairStand = false;
     hasFastWalk = false;
     hasCameraVision = false;
+    hasPoseEstimation = false;
+    hasFusedResult = false;
   }
 }
 
